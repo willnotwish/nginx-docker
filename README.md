@@ -1,1 +1,1 @@
-Nginx reverse proxy for members + public downstream
+Nginx reverse proxy for members + public upstream
