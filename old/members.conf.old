@@ -1,0 +1,72 @@
+# members.conf
+
+root   /var/www/members/html;
+index  index.html;
+
+client_max_body_size 6M;
+
+# Define where Nginx should write its logs
+access_log /var/www/members/log/nginx.access.log;
+error_log stderr info;
+
+# Deny requests for files that should never be accessed
+location ~ /\. {
+  deny all;
+}
+
+location ~* ^.+\.(rb|log)$ {
+  deny all;
+}
+
+# Serve static assets directly if they exist
+location ~ ^/(assets|images|javascripts|stylesheets|system)/ {
+  try_files $uri
+            @members_upstream;
+
+  access_log off;
+  gzip_static on; # to serve pre-gzipped version
+
+  expires max;
+  add_header Cache-Control public;
+
+  # Some browsers still send conditional-GET requests if there's a
+  # Last-Modified header or an ETag header even if they haven't
+  # reached the expiry date sent in the Expires header.
+  add_header Last-Modified "";
+  add_header ETag "";
+  break;
+}
+
+# Admin upstream
+location /admin {
+  try_files /system/admin-maintenance.html
+            $uri
+            @admin_upstream;
+}
+
+# Members upstream
+location / {
+  try_files /system/maintenance.html
+            $uri
+            @members_upstream;
+}
+
+location @members_upstream {
+  proxy_set_header X-Forwarded-Proto $scheme; # prevent infinite request loop
+  proxy_set_header X-Real-IP  $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header Host $http_host;
+  proxy_redirect off;
+  proxy_max_temp_file_size 0;
+  proxy_pass http://members_app;
+}
+
+location @admin_upstream {
+  proxy_set_header X-Forwarded-Proto $scheme; # prevent infinite request loop
+  proxy_set_header X-Real-IP  $remote_addr;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header Host $http_host;
+  proxy_redirect off;
+  proxy_max_temp_file_size 0;
+  proxy_pass http://admin_app;
+}

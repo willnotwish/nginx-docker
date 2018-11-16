@@ -1,27 +1,26 @@
 FROM nginx:alpine
 
-# We need bash & openssl
-RUN apk update && apk add bash openssl curl && \
+RUN apk update && \
+    apk add bash openssl curl inotify-tools && \
     rm -rf /var/cache/apk/*
 
-ENV SSL_ROOT /var/www/ssl
-ENV SSL_CERT_HOME $SSL_ROOT/certs/live
+# monitor.sh looks to see if a reload/restart is requested. Called by entrypoint.sh
+COPY entrypoint.sh monitor.sh /tmp/
+RUN chmod +x /tmp/entrypoint.sh /tmp/monitor.sh
 
-# Include the script that is needed by CMD, below
-COPY cmd.sh /tmp/
-RUN chmod +x /tmp/cmd.sh
+COPY conf /etc/nginx/
 
 WORKDIR /var/www
-RUN mkdir ssl members members/log members/html public public/log public/html
 
-# Copy Nginx config files
-COPY nginx.default.conf nginx.public.conf nginx.members.conf /tmp/
+RUN mkdir -p ssl html \
+  /monitor            \
+  /etc/nginx/sites-available /etc/nginx/sites-enabled /etc/nginx/certs
 
-# Substitute variable references in the Nginx config template for real values from the environment.
-# Put the final config in its place
-RUN envsubst '$SSL_ROOT:$SSL_CERT_HOME:$BASE_DOMAIN' < /tmp/nginx.default.conf > /etc/nginx/conf.d/default.conf && \
-    envsubst '$SSL_ROOT:$SSL_CERT_HOME:$BASE_DOMAIN' < /tmp/nginx.public.conf  > /etc/nginx/conf.d/public.conf && \
-    envsubst '$SSL_ROOT:$SSL_CERT_HOME:$BASE_DOMAIN' < /tmp/nginx.members.conf > /etc/nginx/conf.d/members.conf
+ENV SSL_ROOT=/var/www/ssl
 
-# Define the script we want to run once the container starts
-CMD [ "/tmp/cmd.sh" ]
+# sites-available/sites-enabled follow the Ubuntu convention
+VOLUME ["/etc/nginx/sites-available", "/etc/nginx/sites-enabled", "/monitor", "/etc/nginx/certs", "/var/www/ssl/params"]
+
+ENTRYPOINT ["/tmp/entrypoint.sh"]
+
+CMD ["nginx", "-g", "daemon off;"]
